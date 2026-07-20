@@ -16,7 +16,7 @@ set_config(transform_output='pandas')
 
 num_cols = ["age",
             "ratings",
-            "pickup_time_minutes",
+            "pickup_time_minutes",  
             "distance"]
 
 nominal_cat_cols = ['weather',
@@ -139,7 +139,6 @@ if __name__ == "__main__":
                                             unknown_value=-1), ordinal_cat_cols)],
                                     remainder="passthrough",
                                     n_jobs=-1,
-                                    force_int_remainder_cols=False,
                                     verbose_feature_names_out=False)
     
     

@@ -1,3 +1,8 @@
+import sys
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 import pandas as pd
 import joblib
 import logging
@@ -11,12 +16,12 @@ import json
 
 # initialize dagshub
 import dagshub
-dagshub.init(repo_owner='himanshu1703', 
-             repo_name='swiggy-delivery-time-prediction', 
+dagshub.init(repo_owner='Aman-Husain-123', 
+             repo_name='swiggy_delivery_time_prediction', 
              mlflow=True)
 
 # set the mlflow tracking server
-mlflow.set_tracking_uri("https://dagshub.com/himanshu1703/swiggy-delivery-time-prediction.mlflow")
+mlflow.set_tracking_uri("https://dagshub.com/Aman-Husain-123/swiggy_delivery_time_prediction.mlflow")
 
 # set mlflow experment name
 mlflow.set_experiment("DVC Pipeline")

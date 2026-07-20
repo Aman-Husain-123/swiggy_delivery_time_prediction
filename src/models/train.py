@@ -1,13 +1,18 @@
-import mlflow
-import dagshub
-import json
-from pathlib import Path
-from mlflow import MlflowClient
+import pandas as pd
+import yaml
+import joblib
 import logging
+from pathlib import Path
+from sklearn.ensemble import RandomForestRegressor, StackingRegressor
+from lightgbm import LGBMRegressor
+from sklearn.preprocessing import PowerTransformer
+from sklearn.compose import TransformedTargetRegressor
+from sklearn.linear_model import Ridge
 
+TARGET = "time_taken"
 
 # create logger
-logger = logging.getLogger("register_model")
+logger = logging.getLogger("train")
 logger.setLevel(logging.INFO)
 
 # console handler
@@ -17,64 +22,92 @@ handler.setLevel(logging.INFO)
 # add handler to logger
 logger.addHandler(handler)
 
-# create a fomratter
+# create a formatter
 formatter = logging.Formatter(fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# add formatter to handler
 handler.setFormatter(formatter)
 
-# initialize dagshub
-import dagshub
-import mlflow.client
-dagshub.init(repo_owner='himanshu1703', 
-             repo_name='swiggy-delivery-time-prediction', 
-             mlflow=True)
 
-# set the mlflow tracking server
-mlflow.set_tracking_uri("https://dagshub.com/himanshu1703/swiggy-delivery-time-prediction.mlflow")
+def load_data(data_path: Path) -> pd.DataFrame:
+    try:
+        df = pd.read_csv(data_path)
+    except FileNotFoundError:
+        logger.error("The file to load does not exist")
+        raise
+    return df
 
 
-def load_model_information(file_path):
-    with open(file_path) as f:
-        run_info = json.load(f)
-        
-    return run_info
+def read_params(file_path: Path):
+    with open(file_path, "r") as f:
+        params_file = yaml.safe_load(f)
+    return params_file
+
+
+def make_X_and_y(data: pd.DataFrame, target_column: str):
+    X = data.drop(columns=[target_column])
+    y = data[target_column]
+    return X, y
 
 
 if __name__ == "__main__":
     # root path
     root_path = Path(__file__).parent.parent.parent
+
+    # data load path
+    train_data_path = root_path / "data" / "processed" / "train_trans.csv"
     
-    # run information file path
-    run_info_path = root_path / "run_information.json"
+    # params path
+    params_file_path = root_path / "params.yaml"
     
-    # register the model
-    run_info = load_model_information(run_info_path)
-    
-    # get the run id
-    run_id = run_info["run_id"]
-    model_name = run_info["model_name"]
-    
-    # model to register path
-    model_registry_path = f"runs:/{run_id}/{model_name}"
-    
-    
-    # register the model
-    model_version = mlflow.register_model(model_uri=model_registry_path,
-                                          name=model_name)
-    
-    
-    # get the model version
-    registered_model_version = model_version.version
-    registered_model_name = model_version.name
-    logger.info(f"The latest model version in model registry is {registered_model_version}")
-    
-    # update the stage of the model to staging
-    client = MlflowClient()
-    client.transition_model_version_stage(
-        name=registered_model_name,
-        version=registered_model_version,
-        stage="Staging"
+    # models save dir
+    models_save_dir = root_path / "models"
+    models_save_dir.mkdir(exist_ok=True, parents=True)
+
+    # load training data
+    train_df = load_data(train_data_path)
+    logger.info("Processed training data loaded successfully")
+
+    # split into X and y
+    X_train, y_train = make_X_and_y(train_df, TARGET)
+
+    # read parameters
+    params = read_params(params_file_path)["Train"]
+    rf_params = params["Random_Forest"]
+    lgb_params = params["LightGBM"]
+    logger.info("Parameters loaded successfully")
+
+    # instantiate base estimators
+    rf = RandomForestRegressor(random_state=42, **rf_params)
+    lgb = LGBMRegressor(random_state=42, **lgb_params)
+
+    # stacking regressor
+    stacking_regressor = StackingRegressor(
+        estimators=[
+            ("rf", rf),
+            ("lgb", lgb)
+        ],
+        final_estimator=Ridge()
     )
-    
-    logger.info("Model pushed to Staging stage")
-    
+
+    # power transformer for target
+    power_transformer = PowerTransformer()
+
+    # transformed target regressor
+    model = TransformedTargetRegressor(
+        regressor=stacking_regressor,
+        transformer=power_transformer
+    )
+
+    # train model
+    logger.info("Training stacking regressor model...")
+    model.fit(X_train, y_train)
+    logger.info("Model training complete")
+
+    # save artifacts
+    model_save_path = models_save_dir / "model.joblib"
+    pt_save_path = models_save_dir / "power_transformer.joblib"
+    sr_save_path = models_save_dir / "stacking_regressor.joblib"
+
+    joblib.dump(model, model_save_path)
+    joblib.dump(model.transformer_, pt_save_path)
+    joblib.dump(model.regressor_, sr_save_path)
+    logger.info("All model artifacts saved successfully")

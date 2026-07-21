@@ -11,3 +11,5 @@ dvc
 dagshub
 joblib
 mlflow
+dvc-s3
+pytest

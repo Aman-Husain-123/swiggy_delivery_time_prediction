@@ -63,9 +63,25 @@ if __name__ == "__main__":
     model_registry_path = f"runs:/{run_id}/{model_name}"
     
     
-    # register the model
-    model_version = mlflow.register_model(model_uri=model_registry_path,
-                                          name=model_name)
+    # register the model with a retry mechanism for DagsHub eventual consistency
+    import time
+    max_retries = 10
+    retry_delay = 10
+    model_version = None
+    
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"Attempting to register model (Attempt {attempt + 1}/{max_retries})...")
+            model_version = mlflow.register_model(model_uri=model_registry_path,
+                                                name=model_name)
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Registration failed: {e}. Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                logger.error("Failed to register model after multiple attempts.")
+                raise e
     
     
     # get the model version

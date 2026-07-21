@@ -1,23 +1,6 @@
 import numpy as np
 import pandas as pd
-from pathlib import Path
-import logging
 
-# create logger
-logger = logging.getLogger("data_cleaning")
-logger.setLevel(logging.INFO)
-
-# console handler
-handler = logging.StreamHandler()
-handler.setLevel(logging.INFO)
-
-# add handler to logger
-logger.addHandler(handler)
-
-# create a fomratter
-formatter = logging.Formatter(fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# add formatter to handler
-handler.setFormatter(formatter)
 
 columns_to_drop =  ['rider_id',
                     'restaurant_latitude',
@@ -32,17 +15,7 @@ columns_to_drop =  ['rider_id',
                     "order_month"]
 
 
-def load_data(data_path: Path) -> pd.DataFrame:
-    try:
-        df = pd.read_csv(data_path)
-    
-    except FileNotFoundError:
-        logger.error("The file to load does not exist")
-    
-    return df
-
-
-def change_column_names(data: pd.DataFrame) -> pd.DataFrame:
+def change_column_names(data: pd.DataFrame):
     return (
         data.rename(str.lower,axis=1)
         .rename({
@@ -55,12 +28,13 @@ def change_column_names(data: pd.DataFrame) -> pd.DataFrame:
             "time_order_picked": "order_picked_time",
             "weatherconditions": "weather",
             "road_traffic_density": "traffic",
-            "city": "city_type",
-            "time_taken(min)": "time_taken"},axis=1)
+            "city": "city_type"},
+            #"time_taken(min)": "time_taken"},
+            axis=1)
     )
 
 
-def data_cleaning(data: pd.DataFrame) -> pd.DataFrame:
+def data_cleaning(data: pd.DataFrame):
     minors_data = data.loc[data['age'].astype('float') < 18]
     minor_index = minors_data.index.tolist()
     six_star_data = data.loc[data['ratings'] == "6"]
@@ -121,76 +95,17 @@ def data_cleaning(data: pd.DataFrame) -> pd.DataFrame:
             festival = lambda x: x['festival'].str.rstrip().str.lower(),
             city_type = lambda x: x['city_type'].str.rstrip().str.lower(),
             # multiple deliveries column
-            multiple_deliveries = lambda x: x['multiple_deliveries'].astype(float),
+            multiple_deliveries = lambda x: x['multiple_deliveries'].astype(float))
             # target column modifications
-            time_taken = lambda x: (x['time_taken']
-                                    .str.replace("(min) ","")
-                                    .astype(int)))
-        .drop(columns=["order_time","order_picked_time"])
-    )
-    
-def inference_data_cleaning(data: pd.DataFrame) -> pd.DataFrame:
-    return (
-        data
-        .drop(columns=["id"], errors="ignore")
-        .replace("NaN ",np.nan)                                                 # missing values in the data
-        .assign(
-            # city column out of rider id
-            city_name = lambda x: x['rider_id'].str.split("RES").str.get(0),
-            # convert age to float
-            age = lambda x: x['age'].astype(float),
-            # convert ratings to float
-            ratings = lambda x: x['ratings'].astype(float),
-            # absolute values for location based columns
-            restaurant_latitude = lambda x: x['restaurant_latitude'].abs(),
-            restaurant_longitude = lambda x: x['restaurant_longitude'].abs(),
-            delivery_latitude = lambda x: x['delivery_latitude'].abs(),
-            delivery_longitude = lambda x: x['delivery_longitude'].abs(),
-            # order date to datetime and feature extraction
-            order_date = lambda x: pd.to_datetime(x['order_date'],
-                                                  dayfirst=True),
-            order_day = lambda x: x['order_date'].dt.day,
-            order_month = lambda x: x['order_date'].dt.month,
-            order_day_of_week = lambda x: x['order_date'].dt.day_name().str.lower(),
-            is_weekend = lambda x: (x['order_date']
-                                    .dt.day_name()
-                                    .isin(["Saturday","Sunday"])
-                                    .astype(int)),
-            # time based columns
-            order_time = lambda x: pd.to_datetime(x['order_time'],
-                                                  format='mixed'),
-            order_picked_time = lambda x: pd.to_datetime(x['order_picked_time'],
-                                                         format='mixed'),
-            # time taken to pick order
-            pickup_time_minutes = lambda x: (
-                                            (x['order_picked_time'] - x['order_time'])
-                                            .dt.seconds / 60
-                                            ),
-            # hour in which order was placed
-            order_time_hour = lambda x: x['order_time'].dt.hour,
-            # time of the day when order was placed
-            order_time_of_day = lambda x: (
-                                x['order_time_hour'].pipe(time_of_day)),
-            # categorical columns
-            weather = lambda x: (
-                                x['weather']
-                                .str.replace("conditions ","")
-                                .str.lower()
-                                .replace("nan",np.nan)),
-            traffic = lambda x: x["traffic"].str.rstrip().str.lower(),
-            type_of_order = lambda x: x['type_of_order'].str.rstrip().str.lower(),
-            type_of_vehicle = lambda x: x['type_of_vehicle'].str.rstrip().str.lower(),
-            festival = lambda x: x['festival'].str.rstrip().str.lower(),
-            city_type = lambda x: x['city_type'].str.rstrip().str.lower(),
-            # multiple deliveries column
-            multiple_deliveries = lambda x: x['multiple_deliveries'].astype(float)
-        )
+            # time_taken = lambda x: (x['time_taken']
+            #                         .str.replace("(min) ","")
+            #                         .astype(int)))
         .drop(columns=["order_time","order_picked_time"])
     )
     
     
     
-def clean_lat_long(data: pd.DataFrame, threshold: float=1.0) -> pd.DataFrame:
+def clean_lat_long(data: pd.DataFrame, threshold=1):
     location_columns = ['restaurant_latitude',
                         'restaurant_longitude',
                         'delivery_latitude',
@@ -208,7 +123,7 @@ def clean_lat_long(data: pd.DataFrame, threshold: float=1.0) -> pd.DataFrame:
     
     
 # extract day, day name, month and year
-def extract_datetime_features(ser: pd.Series) -> pd.DataFrame:
+def extract_datetime_features(ser):
     date_col = pd.to_datetime(ser,dayfirst=True)
 
     return (
@@ -222,9 +137,8 @@ def extract_datetime_features(ser: pd.Series) -> pd.DataFrame:
             }
         ))
     
-
     
-def time_of_day(ser: pd.Series):
+def time_of_day(ser):
 
     return(
         pd.cut(ser,bins=[0,6,12,17,20,24],right=True,
@@ -232,8 +146,12 @@ def time_of_day(ser: pd.Series):
     )
 
 
+def drop_columns(data: pd.DataFrame, columns: list) -> pd.DataFrame:
+    df = data.drop(columns=columns)
+    return df
 
-def calculate_haversine_distance(df: pd.DataFrame) -> pd.DataFrame:
+
+def calculate_haversine_distance(df):
     location_columns = ['restaurant_latitude',
                         'restaurant_longitude',
                         'delivery_latitude',
@@ -260,8 +178,7 @@ def calculate_haversine_distance(df: pd.DataFrame) -> pd.DataFrame:
             distance = distance)
     )
 
-
-def create_distance_type(data: pd.DataFrame) -> pd.DataFrame:
+def create_distance_type(data: pd.DataFrame):
     return(
         data
         .assign(
@@ -270,14 +187,7 @@ def create_distance_type(data: pd.DataFrame) -> pd.DataFrame:
     ))
 
 
-
-def drop_columns(data: pd.DataFrame, columns: list) -> pd.DataFrame:
-    df = data.drop(columns=columns)
-    return df
- 
-    
-    
-def perform_data_cleaning(data: pd.DataFrame, saved_data_path: Path = None) -> pd.DataFrame:
+def perform_data_cleaning(data: pd.DataFrame):
     
     cleaned_data = (
         data
@@ -289,44 +199,16 @@ def perform_data_cleaning(data: pd.DataFrame, saved_data_path: Path = None) -> p
         .pipe(drop_columns,columns=columns_to_drop)
     )
     
-    # save the data
-    if saved_data_path:
-        cleaned_data.to_csv(saved_data_path,index=False)
-        
-    return cleaned_data
-    
-def perform_inference_data_cleaning(data: pd.DataFrame) -> pd.DataFrame:
-    cleaned_data = (
-        data
-        .pipe(change_column_names)
-        .pipe(inference_data_cleaning)
-        .pipe(clean_lat_long)
-        .pipe(calculate_haversine_distance)
-        .pipe(create_distance_type)
-        .pipe(drop_columns,columns=columns_to_drop)
-    )
-    return cleaned_data
+    return cleaned_data.dropna()
     
     
 
 if __name__ == "__main__":
-    # root path
-    root_path = Path(__file__).parent.parent.parent
-    # data save directory
-    cleaned_data_save_dir = root_path / "data" / "cleaned"
-    # make directory if not exits
-    cleaned_data_save_dir.mkdir(exist_ok=True,parents=True)
-    # cleaned data file name
-    cleaned_data_filename = "swiggy_cleaned.csv"
-    # data save path
-    cleaned_data_save_path = cleaned_data_save_dir / cleaned_data_filename
-    # data load path
-    data_load_path = root_path / "data" / "raw" / "swiggy.csv"
+    # data path for data
+    DATA_PATH = "swiggy.csv"
     
-    # load the data
-    df = load_data(data_load_path)
-    logger.info("Data read successfully")
+    # read the data from path
+    df = pd.read_csv(DATA_PATH)
+    print('swiggy data loaded successfuly')
     
-    # clean the data and save
-    perform_data_cleaning(data=df, saved_data_path=cleaned_data_save_path)
-    logger.info("Data cleaned and saved")
+    perform_data_cleaning(df)
